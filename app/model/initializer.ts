@@ -1,8 +1,7 @@
-import Database from './database';
-import * as FileSystem from 'expo-file-system';
-import * as Font from 'expo-font';
 import StorageFactory from '@/app/model/Storage';
-import { changeLanguage } from '@/app/model/i18n';
+// import { changeLanguage } from '@/app/model/i18n';
+import * as FileSystem from 'expo-file-system';
+import Database from './database';
 
 export default class Initializer {
     private static instance: Initializer;
@@ -48,7 +47,8 @@ export default class Initializer {
      **************/
     private async checkTablesExist(): Promise<boolean> {
         const requiredTables = [
-            'languages',
+            'habits',
+            'logs',
         ];
 
         try {
@@ -77,18 +77,40 @@ export default class Initializer {
             // Start transaction for all table creation and data insertion
             await this.db.transactionStart();
 
-            // Create languages table
-            // await this.db.execute(`
-            //     CREATE TABLE IF NOT EXISTS languages (
-            //         code VARCHAR NOT NULL,
-            //         name VARCHAR NOT NULL,
-            //         native_name VARCHAR NOT NULL,
-            //         bcp47 VARCHAR NOT NULL,
-            //         az VARCHAR,
-            //         enabled TINYINT NOT NULL,
-            //         PRIMARY KEY (code)
-            //     )
-            // `);
+            // Create habits table for habit tracker
+            await this.db.execute(`
+                CREATE TABLE IF NOT EXISTS habits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR NOT NULL,
+                    description TEXT,
+                    color VARCHAR DEFAULT '#007AFF',
+                    icon VARCHAR,
+                    frequency VARCHAR DEFAULT 'daily',
+                    target_days INTEGER DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1
+                )
+            `);
+
+            // Create habit_logs table for tracking completed days
+            await this.db.execute(`
+                CREATE TABLE IF NOT EXISTS logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    habit_id INTEGER NOT NULL,
+                    completed_date DATE NOT NULL,
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (habit_id) REFERENCES habits (id) ON DELETE CASCADE,
+                    UNIQUE(habit_id, completed_date)
+                )
+            `);
+
+            // Create index for better performance on habit_logs
+            await this.db.execute(`
+                CREATE INDEX IF NOT EXISTS idx_logs_habit_date 
+                ON logs (habit_id, completed_date)
+            `);
 
             // Commit all changes
             await this.db.transactionEnd();
@@ -146,7 +168,7 @@ export default class Initializer {
 
     private loadTranslations() {
         // TODO:
-        changeLanguage('en');
+        // changeLanguage('en');
     }
 
     private async resetAll() {
